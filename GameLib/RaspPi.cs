@@ -10,8 +10,13 @@ namespace GameLib
 {
     public class RaspPi 
     {
+      // DO for led
       GPIOPinDriver _drv17;
+      // DO for led
       GPIOPinDriver _drv27;
+
+      // DI for Demo mode on off
+      GPIOPinDriver _drv22;     
 
       bool _bSimulationMode;
 
@@ -28,6 +33,9 @@ namespace GameLib
 
           _drv27 = new GPIOPinDriver(GPIOPinDriver.Pin.GPIO27, _bSimulationMode);
           _drv27.Direction = GPIOPinDriver.GPIODirection.Out;
+
+          _drv22 = new GPIOPinDriver(GPIOPinDriver.Pin.GPIO22, _bSimulationMode);
+          _drv22.Direction = GPIOPinDriver.GPIODirection.In;
       }
 
 
@@ -84,6 +92,19 @@ namespace GameLib
               return "OK";
           });      
             
+      }
+
+      public int ReadPin(GPIOPinDriver.Pin pin)
+      {
+        GPIOPinDriver drv = GetDriver(pin);
+        if(drv == null)
+        {
+            Console.WriteLine("Driver not found");
+            return 0;
+        }
+        if(drv.State == GPIOPinDriver.GPIOState.High)
+          return 1;
+        return 0;
       }
 
     }
