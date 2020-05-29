@@ -51,6 +51,8 @@ namespace GameLib
               return _drv17;
           if (pin == GPIOPinDriver.Pin.GPIO27)
               return _drv27;
+          if (pin == GPIOPinDriver.Pin.GPIO22)
+              return _drv22;
           return null;
       }
 
