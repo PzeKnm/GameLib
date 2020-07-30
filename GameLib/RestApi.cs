@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -63,6 +64,20 @@ namespace GameLib
         }
         else 
           return false;
+    }
+
+    public string GetSetting(string settingName)
+    {
+      string sUrl = sBaseURL + @"Settings?SettingName=" + settingName;      
+      string sResult = SendHttpRequest(sUrl);
+
+      if(sResult != "")
+      {
+        RestWrapper<string> wrap = JsonConvert.DeserializeObject<RestWrapper<string>>(sResult);
+        return wrap.Data;
+      }
+
+      return sResult;
     }
 
 

@@ -15,7 +15,9 @@ namespace GameLib
   {
     Initialised = 0,  // Started
     Activated,        // Registered at server, but not available for clients
-    Online,           // Registered at server, and available for clients
+    Online_Ready,     // Registered at server, and available for clients
+    Online_Dormant,   // Registered at server, and available for clients, low activity mode
+    Online_Demo,      // Registered at server, and available for clients, high activity mode
     Authenticating,   // Access Code generated, waiting for client to send code
     PreGame,          // |
     GamePlaying,      // |  - Client connected
@@ -34,8 +36,21 @@ namespace GameLib
 
     RestApi _restApi;
 
-    // Resets the game
-    Watchdog _dogReset;
+    // Monitors when the game is online but seemingly inactive. Switches state to either dormant or demo.
+    Watchdog _dogIdleProcessor;
+
+    // Stores the last time the game/user did something. Used to calculate how long the inactivity period is
+    // Doesn't include going from Online_xxx to Online_yyy.
+    DateTime _lastGameActivity;
+
+    /// how long to be idle before entering demo mode 
+  ////  int _EnterDemoDelaySecs = 60 * 10;
+
+    // Stores when the demo begins
+    //// DateTime _dteDemoBegins;
+
+    // How long to stay in demo mode
+    //// int _ExitDemoDelaySecs = 60 * 10;
 
     // Client takes too long to authenticate
     Watchdog _dogAuthenticationTimeout;
@@ -51,9 +66,9 @@ namespace GameLib
     {
       _theGame = createGame(this);
 
-      _dogReset = new Watchdog(1000 * 60 * 10);// 10 minutes.
-      _dogReset.WatchdogBites += _dog_WatchdogResetBites;
-      _dogReset.Start(); 
+      _dogIdleProcessor = new Watchdog(1000 * 60 * 1);// 1 minutes.
+      _dogIdleProcessor.WatchdogBites += _dog_WatchdogIdleProcessorBites;
+      _dogIdleProcessor.Start(); 
 
       _dogAuthenticationTimeout = new Watchdog(1000 * _theGame.GetAuthenticationTimeoutSec());
       _dogAuthenticationTimeout.WatchdogBites += _dog_WatchdogAuthenticationBites;
@@ -71,6 +86,9 @@ namespace GameLib
       _theGame.ScoreChanged += _Game_ScoreChanged;
       _theGame.GameFinished += _Game_GameFinished;
 
+   ////   _EnterDemoDelaySecs = Convert.ToInt32(GetSettingFromApi("EnterDemoDelaySecs", _EnterDemoDelaySecs.ToString()));
+   ////   _ExitDemoDelaySecs = Convert.ToInt32(GetSettingFromApi("ExitDemoDelaySecs", _ExitDemoDelaySecs.ToString()));
+
    //   SetGameState(GameManagerState.Initialised);
            
       Activate();
@@ -79,11 +97,23 @@ namespace GameLib
    //   mu.DoSomething();
     }
 
+    private string GetSettingFromApi(string name, string defValue)
+    {
+      string s = _restApi.GetSetting(name);
+      if(s != "")
+        return s;
+      return defValue;
+    }
+
     public string GetHubDeviceID()
     {
       return _theGame.GetHubDeviceID();
     }
 
+    /// <summary>
+    /// default every 30s
+    /// </summary>
+    /// <returns></returns>
     public int GetHeartbeatMs()
     {
       return _theGame.GetHeartbeatMs();
@@ -94,10 +124,19 @@ namespace GameLib
       // TODO abort the game
     }
 
-    private void _dog_WatchdogResetBites(object sender, ElapsedEventArgs e)
+    private void _dog_WatchdogIdleProcessorBites(object sender, ElapsedEventArgs e)
     {
-      // No response from game for a while, reset.
-      ResetGame();
+      // If the game is busy, let it carry on
+      _dogIdleProcessor.Reset();
+
+      if( GetGameManagerState() != GameManagerState.Online_Demo &&
+          GetGameManagerState() != GameManagerState.Online_Dormant &&
+          GetGameManagerState() != GameManagerState.Online_Ready )
+        return;
+
+      Console.WriteLine("Processing idle status...");
+      GameManagerState newState = _theGame.GetGameManagerStateFromIdle();
+      SetGameState(newState);
     }
 
     private void _dog_WatchdogAuthenticationBites(object sender, ElapsedEventArgs e)
@@ -106,7 +145,7 @@ namespace GameLib
         return;
       // Client hasn't authorised within limit.
       DetachClient();
-      SetGameState(GameManagerState.Online);
+      SetGameState(GameManagerState.Online_Ready);
     }
 
     public int GetTotalPreGameSecs()
@@ -138,21 +177,29 @@ namespace GameLib
     {
       return _dogPostGameTimeout.GetRemainingTimeSec();
     }
-    
+
+
+    public int GetTimeWithoutGameActivitySecs()
+    {
+      TimeSpan ts = DateTime.Now - _lastGameActivity;
+      return (int)ts.TotalSeconds;
+    }
+
+
     private void _dog_WatchdogPreGameBites(object sender, ElapsedEventArgs e)
     {
       if (GetGameManagerState() != GameManagerState.PreGame)
         return;
       // Client hasn't begun game within limit.
       DetachClient();
-      SetGameState(GameManagerState.Online);
+      SetGameState(GameManagerState.Online_Ready);
     }
 
     private void _dog_WatchdogPostGameBites(object sender, ElapsedEventArgs e)
     {
       if (GetGameManagerState() != GameManagerState.PostGame)
         return;      
-      SetGameState(GameManagerState.Online);
+      SetGameState(GameManagerState.Online_Ready);
     }
 
     private void ResetGame()
@@ -165,12 +212,18 @@ namespace GameLib
     public void SendHeartbeat()
     {
       GameManagerState s = GetGameManagerState();
-      if(s == GameManagerState.Online || 
+      if(s == GameManagerState.Online_Ready || 
+         s == GameManagerState.Online_Demo || 
+         s == GameManagerState.Online_Dormant || 
          s == GameManagerState.Authenticating ||
          s == GameManagerState.PreGame ||
          s == GameManagerState.GamePlaying ||
          s == GameManagerState.PostGame)
+      {
         _restApi.SendHeartbeat();
+      }
+
+
     }
 
     public void Cleanup()
@@ -188,7 +241,7 @@ namespace GameLib
         Thread.Sleep(1000);
 
         if (GetGameManagerState() == GameManagerState.Activated)
-          SetGameState(GameManagerState.Online);
+          SetGameState(GameManagerState.Online_Ready);
       }
       else
       {
@@ -216,7 +269,10 @@ namespace GameLib
       _gameState = state;
       DateTime dte = DateTime.Now;
       Console.WriteLine(dte.ToShortDateString() + " - " + dte.ToLongTimeString() + "\t\t\tNew game state: " + _gameState.ToString());
-      _dogReset.Reset();
+
+      if(state != GameManagerState.Online_Ready && state != GameManagerState.Online_Demo && state != GameManagerState.Online_Dormant)
+        _lastGameActivity = DateTime.Now;
+
       if(_restApi.UploadStationStatus(_gameState.ToString()))
       {
         _theGame.GameStateHasChanged();
@@ -252,7 +308,9 @@ namespace GameLib
 
       if (gc.Command == "GenerateAccessCode")
       {
-        if(GetGameManagerState() != GameManagerState.Online)
+        if(GetGameManagerState() != GameManagerState.Online_Ready &&
+           GetGameManagerState() != GameManagerState.Online_Dormant &&
+           GetGameManagerState() != GameManagerState.Online_Demo )
         {
           string s = "Cannot generate access code in this state.";
           Console.WriteLine(s);

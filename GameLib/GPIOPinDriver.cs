@@ -177,7 +177,7 @@ namespace RaspberryGPIOManager
       else
         GPIO_ROOT_DIR = "/sys/class/gpio/";    
 
-        Console.WriteLine("Dir is " + GPIO_ROOT_DIR);
+      //  Console.WriteLine("Dir is " + GPIO_ROOT_DIR);
     }
 
     /// <summary>

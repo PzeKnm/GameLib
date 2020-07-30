@@ -151,6 +151,11 @@ namespace GameLib
       return _mgr.GetRemainingPostGameSecs();
     }
 
+    protected int GetTimeWithoutGameActivitySecs()
+    {
+      return _mgr.GetTimeWithoutGameActivitySecs();
+    }
+
     protected void InformManagerGameFinished()
     {
       GameFinishedArgs args = new GameFinishedArgs();
@@ -197,7 +202,10 @@ namespace GameLib
     public virtual void ProcessGameCommand(GameCommand gc) {  }
 
     public virtual string GetGameCommands() { return "";}
-
+       
+    // Called from the manager to let the game determine whether it should go into 
+    // or come out of a demo or dormant state
+    public virtual GameManagerState GetGameManagerStateFromIdle() { return GameManagerState.Online_Ready; }
 
     //=================================================================
     // Score related functions
