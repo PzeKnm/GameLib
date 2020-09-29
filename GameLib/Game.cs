@@ -207,6 +207,9 @@ namespace GameLib
     // or come out of a demo or dormant state
     public virtual GameManagerState GetGameManagerStateFromIdle() { return GameManagerState.Online_Ready; }
 
+    // Called to reboot the game due to periodic reboot
+    public virtual bool RebootMachine() {return false; }
+
     //=================================================================
     // Score related functions
     public int GetScore()
@@ -253,6 +256,13 @@ namespace GameLib
         return false;
 
       return _mgr.GetRestApi().PublishMessageToClient(cmd, parms);
+    }
+
+
+    public bool DeactivateGame()
+    {
+      _mgr.Cleanup();
+      return true;
     }
   }
 

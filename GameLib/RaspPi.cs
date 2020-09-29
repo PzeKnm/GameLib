@@ -152,5 +152,12 @@ namespace GameLib
       return 0;
     }
 
+    public bool Reboot()
+    {
+      Console.WriteLine("Rebooting...");
+      System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo() { FileName = "sudo", Arguments = "reboot" });
+      return true;
+    }
+
   }
 }

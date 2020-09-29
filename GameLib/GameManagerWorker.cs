@@ -81,7 +81,16 @@ namespace GameLib
         while (!Stopping)
         {
           _gm.SendHeartbeat();
+
+          if(_gm.GetGameManagerState() == GameManagerState.Initialised)
+          {
+            Thread.Sleep(30000);
+            Console.WriteLine("Retrying Activate...");
+            _gm.Activate();
+          }
           Thread.Sleep(_gm.GetHeartbeatMs());
+
+
           // Insert work here. Make sure it doesn't tight loop!
           // (If work is arriving periodically, use a queue and Monitor.Wait,
           // changing the Stop method to pulse the monitor as well as setting

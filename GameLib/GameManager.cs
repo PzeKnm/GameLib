@@ -43,6 +43,9 @@ namespace GameLib
     // Doesn't include going from Online_xxx to Online_yyy.
     DateTime _lastGameActivity;
 
+    // When the game started
+    DateTime _BootTime;
+
     /// how long to be idle before entering demo mode 
   ////  int _EnterDemoDelaySecs = 60 * 10;
 
@@ -64,6 +67,7 @@ namespace GameLib
 
     public GameManager(CreateGame createGame)
     {
+      _BootTime = DateTime.Now;
       _theGame = createGame(this);
 
       _dogIdleProcessor = new Watchdog(1000 * 60 * 1);// 1 minutes.
@@ -92,9 +96,7 @@ namespace GameLib
    //   SetGameState(GameManagerState.Initialised);
            
       Activate();
-
-   //   GameLib.MyUtils mu = new GameLib.MyUtils();
-   //   mu.DoSomething();
+      
     }
 
     private string GetSettingFromApi(string name, string defValue)
@@ -134,7 +136,19 @@ namespace GameLib
           GetGameManagerState() != GameManagerState.Online_Ready )
         return;
 
-      Console.WriteLine("Processing idle status...");
+
+      // Special case for periodic rebooting, once a day after 1a.m.
+      DateTime dte = DateTime.Now;
+
+      TimeSpan spnActive = (dte - _BootTime);
+      if(spnActive.TotalHours > 23 && dte.Hour == 1)
+      {
+        Console.WriteLine("Daily reboot...");
+        SetGameState(GameManagerState.Deactivated);
+        _theGame.RebootMachine();
+      }
+
+      Console.WriteLine(String.Format("Processing idle status...game active for {0:F2} hours", spnActive.TotalHours));
       GameManagerState newState = _theGame.GetGameManagerStateFromIdle();
       SetGameState(newState);
     }
@@ -233,7 +247,7 @@ namespace GameLib
       SetGameState(GameManagerState.Deactivated);
     }
 
-    private void Activate()
+    public void Activate()
     {
       if(SetGameState(GameManagerState.Activated))
       {
